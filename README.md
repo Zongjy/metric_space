@@ -12,6 +12,9 @@ metric_genhierarchy/
 ├── impl/
 │   ├── vector.py            # 向量对象与 Minkowski 距离
 │   └── protein.py           # 蛋白序列对象与 mPAM 比对距离
+├── query/
+│   ├── linear_scan.py       # 线性扫描查询算法
+│   └── pivot_table.py       # Pivot Table 索引结构
 └── main.py                  # CLI 主入口
 ```
 
@@ -52,8 +55,8 @@ metric_genhierarchy/
 $$
 E(i,j)=
 \begin{cases}
-\displaystyle \sum_{t=1}^{i} Score(S_1(t), \text{gap}), & j = 0 \\[10pt]
-\displaystyle \sum_{t=1}^{j} Score(S_2(t), \text{gap}), & i = 0 \\[12pt]
+\displaystyle \sum_{t=1}^{i} Score(S_1(t), \text{gap}), & j = 0 \\
+\displaystyle \sum_{t=1}^{j} Score(S_2(t), \text{gap}), & i = 0 \\
 \displaystyle \min \Big(
 E(i-1,j) + Score(S_1(i), \text{gap}), \\
 \qquad\quad E(i,j-1) + Score(S_2(j), \text{gap}), \\
@@ -61,6 +64,62 @@ E(i-1,j) + Score(S_1(i), \text{gap}), \\
 \Big), & i=1,\ldots,n,\ j=1,\ldots,m
 \end{cases}
 $$
+
+⸻
+
+### 4. 查询模块 (query)
+
+实现了度量空间相似性查询算法，包括线性扫描和基于 `Pivot Table` 的索引方法。
+
+#### 线性扫描 (`LinearScan`)
+
+直接遍历所有对象进行查询，保证精确结果：
+
+- **范围查询** (`range_query(query, radius)`): 找出与查询对象距离小于等于 radius 的所有对象
+- **kNN 查询** (`knn_query(query, k)`): 找出距离查询对象最近的 k 个对象
+- **dkNN 查询** (`dknn_query(query, k, max_distance)`): 在距离约束内找出最多 k 个最近邻
+
+#### Pivot Table 索引 (`PivotTable`)
+
+利用预选的支撑点（pivot）和三角不等式进行剪枝，减少距离计算次数：
+
+**三角不等式剪枝原理**：对于查询对象 $q$、数据对象 $o$ 和支撑点 $p$，有：
+
+$$
+|d(q,p) - d(o,p)| \leq d(q,o) \leq d(q,p) + d(o,p)
+$$
+
+若 $|d(q,p) - d(o,p)| > r$（查询半径），则可以直接剪枝掉对象 $o$。
+
+**支撑点选择策略**：
+- `random`: 随机选择支撑点
+- `farthest`: 迭代选择与已有支撑点距离最远的对象
+- `incremental`: 增量选择，最大化最小距离
+
+**查询方法**：
+- `range_query(query, radius)`: 带剪枝的范围查询
+- `knn_query(query, k)`: 带剪枝的 kNN 查询
+- `dknn_query(query, k, max_distance)`: 带剪枝的 dkNN 查询
+
+**性能特点**：
+- 预计算支撑点距离表，空间复杂度 $O(n \times m)$（$n$ 为数据对象数，$m$ 为支撑点数）
+- 查询时可显著减少距离计算次数（通常可减少 80-95%）
+- 支撑点数量和选择策略对性能有重要影响
+
+⸻
+
+## 测试
+
+项目包含完整的测试套件，验证各项查询功能的正确性：
+
+```shell
+python tests/test_queries.py
+```
+
+测试覆盖：
+- 线性扫描：范围查询（4个测试）、kNN 查询（4个测试）、dkNN 查询（4个测试）
+- Pivot Table：正确性验证（4个测试）、性能分析（3个测试）
+- 共 19 个测试用例，全面验证功能正确性和性能优化效果
 
 ⸻
 
